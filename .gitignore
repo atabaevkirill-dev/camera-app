@@ -1,0 +1,37 @@
+# --- Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- virtual env (auto-created by run scripts)
+venv/
+.venv/
+env/
+
+# --- user data & secrets (never commit)
+camera_profiles.json
+camera_profiles.json.corrupt-*
+logs/
+archive.db
+archive.db-h264tmp.mp4
+thumbnails/
+screenshots/
+recordings/
+*.avi
+*.mp4
+!docs/**/*.mp4
+
+# --- OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- editor/tooling
+.vscode/
+.idea/
+*.swp
+
+# --- coordinator scaffolding
+_restyle_brief.md
+.cluster/

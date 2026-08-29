@@ -1,0 +1,48 @@
+{
+  "language": "ru",
+  "screenshot_dir": "screenshots",
+  "recording_dir": "recordings",
+  "reticle_in_recording": true,
+  "splitter": [],
+  "cameras": {
+    "cam1": {
+      "autoconnect": true,
+      "source_type": "rtsp",
+      "webcam_index": 0,
+      "connection": {
+        "host": "192.168.1.10",
+        "port": 80,
+        "username": "admin",
+        "password": "",
+        "auth": "digest"
+      },
+      "rtsp": {
+        "url": "",
+        "transport": "tcp",
+        "low_latency": true,
+        "record_fps": 25
+      },
+      "reticle": {
+        "style": "cross", "color": "#00ff00", "thickness": 2, "length": 80,
+        "gap": 14, "opacity": 90, "outline": true, "center_dot": true,
+        "thick_len": 34, "thick_mult": 3, "dots": 4, "dot_spacing": 16, "dot_radius": 2
+      },
+      "reticle_presets": {},
+      "ptz": { "speed": 50 }
+    },
+    "cam2": {
+      "autoconnect": false,
+      "source_type": "rtsp",
+      "webcam_index": 0,
+      "connection": { "host": "", "port": 80, "username": "", "password": "", "auth": "digest" },
+      "rtsp": { "url": "", "transport": "tcp", "low_latency": true, "record_fps": 25 },
+      "reticle": {
+        "style": "cross", "color": "#00ff00", "thickness": 2, "length": 80,
+        "gap": 14, "opacity": 90, "outline": true, "center_dot": true,
+        "thick_len": 34, "thick_mult": 3, "dots": 4, "dot_spacing": 16, "dot_radius": 2
+      },
+      "reticle_presets": {},
+      "ptz": { "speed": 50 }
+    }
+  }
+}

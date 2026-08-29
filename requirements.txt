@@ -1,0 +1,5 @@
+PySide6>=6.5
+opencv-python>=4.8
+requests>=2.31
+Pillow>=10.0.0
+imageio-ffmpeg
