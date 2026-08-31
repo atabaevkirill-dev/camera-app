@@ -246,6 +246,10 @@ TR = {
                               "en": "Player is unavailable on this system. Open the file in the system."},
     "msg.config_corrupt": {"ru": "Файл настроек повреждён и перемещён в:\n{path}\n\nЗагружены настройки по умолчанию.",
                            "en": "The settings file is corrupted and was moved to:\n{path}\n\nDefault settings loaded."},
+    # Tabs in Settings Dialog
+    "tab.connection": {"ru": "Подключение", "en": "Connection"},
+    "tab.rtsp": {"ru": "RTSP", "en": "RTSP"},
+    "tab.reticle": {"ru": "Сетка", "en": "Reticle"},
 }
 
 

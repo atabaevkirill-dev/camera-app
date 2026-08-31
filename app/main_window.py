@@ -104,20 +104,29 @@ class PTZProbe(QThread):
         vstoken = ""
         try:
             caps = self._client.get_capabilities()
-            supported = bool(caps.get("ptz")) or bool(caps.get("imaging"))
-            if supported:
+            # Проверяем, поддерживает ли камера PTZ или Imaging
+            ptz_or_imaging_supported = bool(caps.get("ptz")) or bool(caps.get("imaging"))
+            if ptz_or_imaging_supported:
+                # Пытаемся получить хотя бы один профиль, чтобы использовать его для PTZ
                 try:
                     profs = self._client.get_profiles()
                     if profs:
-                        profile = profs[0]["token"]
-                except Exception:
-                    pass
-                try:
-                    vsc = self._client.get_video_source_configurations()
-                    if vsc:
-                        vstoken = vsc[0]["token"]
-                except Exception:
-                    pass
+                        profile = profs[0]["token"] # Используем первый доступный профиль
+                        # Если профиль получен, считаем PTZ поддерживаемым
+                        supported = True
+                except Exception as e:
+                    log.warning("Could not get PTZ profile for cam%d, assuming not supported: %s", self._idx + 1, e)
+                    supported = False # Если не удается получить профиль, считаем PTZ неподдерживаемым
+
+                # Пытаемся получить VideoSourceToken для Imaging (фокус), если PTZ поддерживается
+                if supported:
+                    try:
+                        vsc = self._client.get_video_source_configurations()
+                        if vsc:
+                            vstoken = vsc[0]["token"]
+                    except Exception as e:
+                        log.warning("Could not get VideoSourceToken for cam%d: %s", self._idx + 1, e)
+                        # Это не критично для PTZ, но важно для фокуса
         except Exception as e:
             log.warning("PTZ probe failed for cam%d: %s", self._idx + 1, e)
         self.probed.emit(self._idx, supported, profile, vstoken)
@@ -793,11 +802,27 @@ class MainWindow(QMainWindow):
         probe.start()
 
     def _on_ptz_probed(self, idx: int, supported: bool, profile: str, vstoken: str):
+        """Handles the result of the PTZ capability probe."""
+        log.debug(f"PTZ probe result for cam{idx+1}: supported={supported}, profile='{profile}', vstoken='{vstoken}'")
         if profile:
             self._ptz_profile[idx] = profile
         if vstoken:
             self._vstoken[idx] = vstoken
         self._pads[idx].set_enabled_state(supported)
+
+    def _open_app_settings(self):
+        """Opens the application settings dialog."""
+        from .app_settings_dialog import AppSettingsDialog  # Import here to avoid circular dependencies if any
+        dlg = AppSettingsDialog(self.cfg, parent=self)
+        dlg.configChanged.connect(self._on_config_changed)
+        dlg.exec()
+
+    def _on_config_changed(self, new_config: dict):
+        """Handles updates from the AppSettingsDialog."""
+        self.cfg.update(new_config)
+        profiles.save_profiles(self.cfg)  # Persist changes
+        self.retranslate()  # Update UI strings if language changed
+        # Add any other necessary UI updates here based on changed settings
 
     def disconnect_camera(self, idx: int) -> None:
         self._connect_gen[idx] += 1
@@ -852,13 +877,6 @@ class MainWindow(QMainWindow):
                 tr("msg.transferred", n=target + 1), 6000)
             self._persist()
             self._open_settings(target)
-
-    def _open_app_settings(self):
-        dlg = AppSettingsDialog(self.cfg, parent=self)
-        if dlg.exec():
-            self._persist()
-            self._schedule_archive_sync()  # paths changed -> resync (C8)
-            self.statusBar().showMessage(tr("msg.app_settings_saved"), 3000)
 
     def _open_archive(self):
         self._switch_view(VIEW_ARCHIVE)

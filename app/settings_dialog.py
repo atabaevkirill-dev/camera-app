@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox,
                                QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QSpinBox,
-                               QVBoxLayout, QWidget)
+                               QVBoxLayout, QWidget, QTabWidget)
 
 from .i18n import tr
 from .onvif_client import OnvifClient, OnvifError, strip_userinfo
@@ -40,7 +40,15 @@ class SettingsDialog(QDialog):
 
         root = QVBoxLayout(self)
 
-        # ---------------- Source type selection
+        # Create tab widget
+        tab_widget = QTabWidget()
+        self.tab_widget = tab_widget # Store reference for retranslate
+
+        # --- Connection Tab ---
+        conn_tab = QWidget()
+        conn_layout = QVBoxLayout(conn_tab)
+
+        # Source type selection
         source_row = QHBoxLayout()
         self.source_type_label = QLabel(tr("source.type"))
         self.source_type_combo = QComboBox()
@@ -52,9 +60,9 @@ class SettingsDialog(QDialog):
         source_row.addWidget(self.source_type_label)
         source_row.addWidget(self.source_type_combo)
         source_row.addStretch(1)
-        root.addLayout(source_row)
+        conn_layout.addLayout(source_row)
 
-        # ---------------- Webcam index (initially hidden)
+        # Webcam index (initially hidden)
         self.webcam_group = QGroupBox(tr("webcam.group"))
         self.webcam_group.setVisible(source_type == "webcam")
         wform = QFormLayout(self.webcam_group)
@@ -62,9 +70,9 @@ class SettingsDialog(QDialog):
         self.webcam_index_spin.setRange(0, 10) # Adjust range as needed
         self.webcam_index_spin.setValue(int(webcam_index))
         wform.addRow(tr("webcam.index"), self.webcam_index_spin)
-        root.addWidget(self.webcam_group)
+        conn_layout.addWidget(self.webcam_group)
 
-        # ---------------- ONVIF connection group
+        # ONVIF connection group
         conn_group = QGroupBox(tr("conn.group"))
         # Make it initially visible only if source is rtsp
         conn_group.setVisible(source_type == "rtsp")
@@ -100,9 +108,15 @@ class SettingsDialog(QDialog):
         test_row.addWidget(self.test_btn)
         test_row.addWidget(self.test_result, 1)
         form.addRow(test_row)
-        root.addWidget(conn_group)
+        conn_layout.addWidget(conn_group)
 
-        # ---------------- RTSP group
+        tab_widget.addTab(conn_tab, tr("tab.connection")) # Assuming translation key for "Connection"
+
+        # --- RTSP Tab ---
+        rtsp_tab = QWidget()
+        rtsp_layout = QVBoxLayout(rtsp_tab)
+
+        # RTSP group
         rtsp_group = QGroupBox(tr("rtsp.group"))
         self.rtsp_group = rtsp_group
         rform = QFormLayout(rtsp_group)
@@ -136,21 +150,33 @@ class SettingsDialog(QDialog):
         self.recfps_spin.setRange(1, 60)
         self.recfps_spin.setValue(int(rtsp.get("record_fps", 25) or 25))
         rform.addRow(tr("rtsp.recfps"), self.recfps_spin)
-        root.addWidget(rtsp_group)
+        rtsp_layout.addWidget(rtsp_group)
 
-        # ---------------- Reticle group
+        tab_widget.addTab(rtsp_tab, tr("tab.rtsp")) # Assuming translation key for "RTSP"
+
+        # --- Reticle Tab ---
+        ret_tab = QWidget()
+        ret_layout = QVBoxLayout(ret_tab)
+
+        # Reticle group
         ret_group = QGroupBox(tr("ret.group"))
         self.ret_group = ret_group
         rlay = QVBoxLayout(ret_group)
         self.ret_editor = ReticleEditor(self.rs, presets)
         self.ret_editor.changed.connect(self._reticle_changed)
         rlay.addWidget(self.ret_editor)
-        root.addWidget(ret_group)
+        ret_layout.addWidget(ret_group)
 
         self.auto_check = QCheckBox(tr("conn.auto"))
         self.auto_check.setChecked(bool(cam_cfg.get("autoconnect", False)))
-        root.addWidget(self.auto_check)
+        ret_layout.addWidget(self.auto_check)
 
+        tab_widget.addTab(ret_tab, tr("tab.reticle")) # Assuming translation key for "Reticle"
+
+        # Add tabs to main layout
+        root.addWidget(tab_widget)
+
+        # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -173,6 +199,10 @@ class SettingsDialog(QDialog):
         self.source_type_label.setText(tr("source.type")) # Add translation key
         self._btn_ok.setText(tr("btn.ok"))
         self._btn_cancel.setText(tr("btn.cancel"))
+        # Update tab titles
+        self.tab_widget.setTabText(0, tr("tab.connection"))
+        self.tab_widget.setTabText(1, tr("tab.rtsp"))
+        self.tab_widget.setTabText(2, tr("tab.reticle"))
 
     def _reticle_changed(self):
         if self.live_cb:
