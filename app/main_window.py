@@ -676,10 +676,6 @@ class MainWindow(QMainWindow):
         return client
 
     def _onvif_for_ptz(self, idx):
-        try:
-            return self._onvif_client(idx)
-        except Exception:
-            pass
         cam = self.cfg["cameras"][CAM_KEYS[idx]]
         pelco = cam.get("pelco_d") or {}
         if pelco.get("enabled") or pelco.get("ip"):
@@ -688,7 +684,10 @@ class MainWindow(QMainWindow):
                                         int(pelco.get("address", 1) or 1))
             except Exception:
                 return None
-        return None
+        try:
+            return self._onvif_client(idx)
+        except Exception:
+            return None
 
     def _invalidate_onvif(self, idx):
         self._onvif[idx] = None
@@ -808,13 +807,14 @@ class MainWindow(QMainWindow):
         self._update_record_all_button()
         if not online:
             return
+        cam = self.cfg["cameras"][CAM_KEYS[idx]]
+        pelco = cam.get("pelco_d") or {}
+        if pelco.get("enabled") or pelco.get("ip"):
+            self._ptz_profile[idx] = "pelco-d"
+            self._pads[idx].set_enabled_state(True)
+            return
         client = self._onvif[idx]
         if client is None:
-            pelco = self.cfg["cameras"][CAM_KEYS[idx]].get("pelco_d") or {}
-            if pelco.get("enabled") or pelco.get("ip"):
-                self._ptz_profile[idx] = "pelco-d"
-                self._pads[idx].set_enabled_state(True)
-                return
             self._pads[idx].set_enabled_state(False)
             return
         # PTZ probe off the GUI thread (C2)

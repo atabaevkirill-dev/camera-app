@@ -318,7 +318,18 @@ class StreamWorker(QThread):
             fails = 0
             last_t = time.time()
             while not self._stop_flag:
-                ok, frame = cap.read()
+                try:
+                    ok, frame = cap.read()
+                except Exception as e:
+                    log.warning("Frame read failed: %s", e)
+                    fails += 1
+                    if fails > 3:
+                        rounds += 1
+                        self.streamLost.emit(rounds)
+                        self.message.emit("Stream read error, reconnecting…")
+                        break
+                    self._sleep_ms(150)
+                    continue
                 if not ok or frame is None:
                     fails += 1
                     if fails > 25:

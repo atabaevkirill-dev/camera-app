@@ -15,14 +15,16 @@ class PelcoDController:
         self._sock.settimeout(1.0)
 
     def _checksum(self, packet):
-        return sum(packet[1:6]) & 0xFF
+        # Pelco-D checksum is the low byte of the sum of bytes 1..6 (address +
+        # command bytes + pan/tilt/zoom speeds), followed by the 0xFF sync byte.
+        return sum(packet[1:7]) & 0xFF
 
     def _send(self, command1: int, command2: int, pan_speed: int = 0, tilt_speed: int = 0, zoom_speed: int = 0):
         if not self.host:
             raise ValueError("Pelco-D host is empty")
         pkt = [0xFF, self.address & 0xFF, command1 & 0xFF, command2 & 0xFF,
                pan_speed & 0xFF, tilt_speed & 0xFF, zoom_speed & 0xFF]
-        pkt[6] = self._checksum(pkt)
+        pkt.append(self._checksum(pkt))
         self._sock.sendto(bytes(pkt), (self.host, self.port))
 
     def ptz_continuous_move(self, profile_token: str, pan: float, tilt: float, zoom: float) -> None:

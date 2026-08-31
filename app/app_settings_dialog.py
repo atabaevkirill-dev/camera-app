@@ -2,7 +2,7 @@
 """Application settings dialog: screenshot and recording paths."""
 
 import os
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog,
                                QFormLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QVBoxLayout)
@@ -12,6 +12,8 @@ from .i18n import tr
 
 class AppSettingsDialog(QDialog):
     """Edits application config dict in place."""
+
+    configChanged = Signal(dict)
 
     def __init__(self, app_cfg: dict, parent=None):
         super().__init__(parent)
@@ -75,4 +77,5 @@ class AppSettingsDialog(QDialog):
 
         self.app_cfg["screenshot_dir"] = ss_path
         self.app_cfg["recording_dir"] = rec_path
+        self.configChanged.emit(self.app_cfg)
         super().accept()
