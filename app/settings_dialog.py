@@ -32,6 +32,7 @@ class SettingsDialog(QDialog):
 
         conn = cam_cfg.setdefault("connection", {})
         rtsp = cam_cfg.setdefault("rtsp", {})
+        pelco = cam_cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9762, "address": 1})
         source_type = cam_cfg.setdefault("source_type", "rtsp")
         webcam_index = cam_cfg.setdefault("webcam_index", 0)
 
@@ -99,6 +100,23 @@ class SettingsDialog(QDialog):
         form.addRow(tr("conn.user"), self.user_edit)
         form.addRow(tr("conn.pass"), self.pass_edit)
         form.addRow(tr("conn.auth"), self.auth_combo)
+
+        self.pelco_group = QGroupBox(tr("pelco.group"))
+        self.pelco_group.setCheckable(True)
+        self.pelco_group.setChecked(bool(pelco.get("enabled", False)))
+        pform = QFormLayout(self.pelco_group)
+        self.pelco_ip_edit = QLineEdit(str(pelco.get("ip", "")))
+        self.pelco_ip_edit.setPlaceholderText("192.168.1.115")
+        self.pelco_port_spin = QSpinBox()
+        self.pelco_port_spin.setRange(1, 65535)
+        self.pelco_port_spin.setValue(int(pelco.get("port", 9762) or 9762))
+        self.pelco_addr_spin = QSpinBox()
+        self.pelco_addr_spin.setRange(1, 255)
+        self.pelco_addr_spin.setValue(int(pelco.get("address", 1) or 1))
+        pform.addRow(tr("pelco.ip"), self.pelco_ip_edit)
+        pform.addRow(tr("pelco.port"), self.pelco_port_spin)
+        pform.addRow(tr("pelco.address"), self.pelco_addr_spin)
+        conn_layout.addWidget(self.pelco_group)
 
         test_row = QHBoxLayout()
         self.test_btn = QPushButton(tr("conn.test"))
@@ -193,6 +211,7 @@ class SettingsDialog(QDialog):
 
     def _retranslate(self):
         self.conn_group.setTitle(tr("conn.group"))
+        self.pelco_group.setTitle(tr("pelco.group"))
         self.rtsp_group.setTitle(tr("rtsp.group"))
         self.ret_group.setTitle(tr("ret.group"))
         self.webcam_group.setTitle(tr("webcam.group")) # Add translation key
@@ -221,6 +240,11 @@ class SettingsDialog(QDialog):
         conn["username"] = self.user_edit.text().strip()
         conn["password"] = self.pass_edit.text()
         conn["auth"] = self.auth_combo.currentData()
+        pelco = self.cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9762, "address": 1})
+        pelco["enabled"] = self.pelco_group.isChecked()
+        pelco["ip"] = self.pelco_ip_edit.text().strip()
+        pelco["port"] = self.pelco_port_spin.value()
+        pelco["address"] = self.pelco_addr_spin.value()
         rtsp = self.cfg["rtsp"]
         rtsp["url"] = strip_userinfo(self.url_edit.text().strip())
         rtsp["transport"] = self.transport_combo.currentData()

@@ -53,56 +53,66 @@ def _parse_matches(data: bytes):
     return out
 
 
-def wsdiscovery_once(timeout: float, include_types: bool) -> dict:
+def wsdiscovery_once(timeout: float, include_types: bool, target_ip: str = None) -> dict:
     """One probe round. Returns {ip: {"ip", "xaddrs", "scopes"}}."""
     results = {}
     types = "<d:Types>dn:NetworkVideoTransmitter</d:Types>" if include_types else ""
     probe = _PROBE_TMPL.format(uid=f"{uuid.uuid4()}", types=types)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.settimeout(0.5)
-    try:
-        sock.sendto(probe.encode("utf-8"), (MULTICAST_ADDR, MULTICAST_PORT))
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                data, addr = sock.recvfrom(65535)
-            except socket.timeout:
-                continue
-            for xaddrs, scopes in _parse_matches(data):
-                for xaddr in xaddrs.split():
-                    try:
-                        p = urlparse(xaddr)
-                        ip = p.hostname or ""
-                        port = p.port or 80
-                    except Exception:
-                        continue
-                    if not ip:
-                        continue
-                    entry = results.get(ip)
-                    if entry is None:
-                        results[ip] = {"ip": ip, "port": port,
-                                       "xaddrs": xaddr, "scopes": scopes}
-                    else:
-                        if xaddr not in entry["xaddrs"]:
-                            entry["xaddrs"] += "  " + xaddr
-                        if not entry.get("scopes") and scopes:
-                            entry["scopes"] = scopes
-    finally:
+    targets = [(MULTICAST_ADDR, MULTICAST_PORT)]
+    if target_ip:
+        targets = [(target_ip, MULTICAST_PORT)]
+    else:
+        targets.append(("255.255.255.255", MULTICAST_PORT))
+    for host, port in targets:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.close()
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         except Exception:
             pass
+        sock.settimeout(0.5)
+        try:
+            sock.sendto(probe.encode("utf-8"), (host, port))
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                try:
+                    data, addr = sock.recvfrom(65535)
+                except socket.timeout:
+                    continue
+                for xaddrs, scopes in _parse_matches(data):
+                    for xaddr in xaddrs.split():
+                        try:
+                            p = urlparse(xaddr)
+                            ip = p.hostname or ""
+                            port = p.port or 80
+                        except Exception:
+                            continue
+                        if not ip:
+                            continue
+                        entry = results.get(ip)
+                        if entry is None:
+                            results[ip] = {"ip": ip, "port": port,
+                                           "xaddrs": xaddr, "scopes": scopes}
+                        else:
+                            if xaddr not in entry["xaddrs"]:
+                                entry["xaddrs"] += "  " + xaddr
+                            if not entry.get("scopes") and scopes:
+                                entry["scopes"] = scopes
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
     return results
 
 
 def wsdiscovery(total_timeout: float = 4.0) -> list:
-    """Two passes: ONVIF NetworkVideoTransmitter types, then generic."""
+    """Two passes: ONVIF multicast, then broadcast fallback."""
     merged = {}
     t1 = max(1.0, total_timeout * 0.6)
     t2 = max(1.0, total_timeout * 0.4)
-    merged.update(wsdiscovery_once(t1, include_types=True))
-    merged.update(wsdiscovery_once(t2, include_types=False))
+    merged.update(wsdiscovery_once(t1, include_types=True, target_ip=None))
+    merged.update(wsdiscovery_once(t2, include_types=False, target_ip="255.255.255.255"))
     return list(merged.values())
 
 

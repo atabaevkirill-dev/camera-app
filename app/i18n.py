@@ -89,6 +89,10 @@ TR = {
     "conn.test_ok": {"ru": "OK: {mfr} {model}, ПО {fw}", "en": "OK: {mfr} {model}, fw {fw}"},
     "conn.test_fail": {"ru": "Ошибка: {err}", "en": "Failed: {err}"},
     "conn.auto": {"ru": "Автоподключаться при запуске", "en": "Auto-connect on startup"},
+    "pelco.group": {"ru": "Пульт PTZ / Pelco-D", "en": "PTZ controller / Pelco-D"},
+    "pelco.ip": {"ru": "IP устройства Pelco-D:", "en": "Pelco-D device IP:"},
+    "pelco.port": {"ru": "Порт Pelco-D:", "en": "Pelco-D port:"},
+    "pelco.address": {"ru": "Адрес устройства:", "en": "Device address:"},
     # RTSP group
     "rtsp.group": {"ru": "RTSP-поток", "en": "RTSP stream"},
     "rtsp.url": {"ru": "RTSP URL:", "en": "RTSP URL:"},

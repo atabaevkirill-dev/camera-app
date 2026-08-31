@@ -21,6 +21,7 @@ from .icons import icon, set_button_icon
 from .journal import JournalView, log_event
 from .logutil import get_logger
 from .onvif_client import OnvifClient, OnvifError, ensure_credentials, strip_userinfo
+from .pelco_d import PelcoDController
 from .ptz_pad import PTZPad
 from .split_recorder import SplitRecorder
 from .editor_dialog import EditorWidget
@@ -678,7 +679,16 @@ class MainWindow(QMainWindow):
         try:
             return self._onvif_client(idx)
         except Exception:
-            return None
+            pass
+        cam = self.cfg["cameras"][CAM_KEYS[idx]]
+        pelco = cam.get("pelco_d") or {}
+        if pelco.get("enabled") or pelco.get("ip"):
+            try:
+                return PelcoDController(pelco.get("ip", ""), int(pelco.get("port", 9762) or 9762),
+                                        int(pelco.get("address", 1) or 1))
+            except Exception:
+                return None
+        return None
 
     def _invalidate_onvif(self, idx):
         self._onvif[idx] = None
@@ -800,6 +810,11 @@ class MainWindow(QMainWindow):
             return
         client = self._onvif[idx]
         if client is None:
+            pelco = self.cfg["cameras"][CAM_KEYS[idx]].get("pelco_d") or {}
+            if pelco.get("enabled") or pelco.get("ip"):
+                self._ptz_profile[idx] = "pelco-d"
+                self._pads[idx].set_enabled_state(True)
+                return
             self._pads[idx].set_enabled_state(False)
             return
         # PTZ probe off the GUI thread (C2)

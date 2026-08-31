@@ -42,6 +42,12 @@ def default_camera() -> dict:
             "low_latency": True,
             "record_fps": 25,
         },
+        "pelco_d": {
+            "enabled": False,
+            "ip": "",
+            "port": 9762,
+            "address": 1,
+        },
         "reticle": ReticleStyle().to_dict(),
         "reticle_presets": {},      # "1".."5" -> ReticleStyle dict
         "ptz": {"speed": 50},
