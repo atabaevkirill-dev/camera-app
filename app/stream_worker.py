@@ -66,6 +66,7 @@ class StreamWorker(QThread):
         self._rec_started_at = None
         self._overlay = None  # (style_dict, (dx, dy)) or None
         self._src_fps = 0.0
+        self._cap = None
         self._on_rec_start_cb = on_recording_start_callback
         self._on_rec_stop_cb = on_recording_stop_callback
 
@@ -134,6 +135,13 @@ class StreamWorker(QThread):
 
     def stop(self) -> None:
         self._stop_flag = True
+        cap = self._cap
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+            self._cap = None
 
     def _safe_cb(self, cb, tag: str) -> None:
         try:
@@ -164,10 +172,13 @@ class StreamWorker(QThread):
         with _CAPTURE_LOCK:
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = self._capture_options()
             if self._source_type == "webcam":
-                return cv2.VideoCapture(int(self._webcam_index))
-            if not self._url:
-                return None
-            return cv2.VideoCapture(self._url, cv2.CAP_FFMPEG)
+                cap = cv2.VideoCapture(int(self._webcam_index))
+            elif not self._url:
+                cap = None
+            else:
+                cap = cv2.VideoCapture(self._url, cv2.CAP_FFMPEG)
+            self._cap = cap
+            return cap
 
     def _close_writer(self) -> None:
         """Closes the video writer safely. Worker thread only (C4)."""
@@ -280,6 +291,7 @@ class StreamWorker(QThread):
                         cap.release()
                     except Exception:
                         pass
+                self._cap = None
                 self.statusChanged.emit(STATUS_OFFLINE)
                 if source_type == "webcam":
                     self.message.emit(f"Cannot open webcam at index {webcam_idx}")
@@ -341,11 +353,13 @@ class StreamWorker(QThread):
                 cap.release()
             except Exception:
                 pass
+            self._cap = None
             if not self._stop_flag:
                 self.statusChanged.emit(STATUS_OFFLINE)
                 self._sleep_ms(int(backoff * 1000))
 
         self._close_writer()
+        self._cap = None
 
     def _sleep_ms(self, ms: int) -> None:
         end = time.time() + ms / 1000.0

@@ -104,29 +104,34 @@ class PTZProbe(QThread):
         vstoken = ""
         try:
             caps = self._client.get_capabilities()
-            # Проверяем, поддерживает ли камера PTZ или Imaging
-            ptz_or_imaging_supported = bool(caps.get("ptz")) or bool(caps.get("imaging"))
-            if ptz_or_imaging_supported:
-                # Пытаемся получить хотя бы один профиль, чтобы использовать его для PTZ
+            # Only treat PTZ as supported when the device actually exposes a usable
+            # PTZ-capable profile. Imaging-only devices still expose AF/focus, but
+            # PTZ pan/tilt/zoom commands require a PTZ-enabled profile token.
+            if caps.get("ptz"):
+                try:
+                    profile = self._client.get_ptz_profile_token()
+                    supported = bool(profile)
+                except Exception as e:
+                    log.warning("Could not resolve PTZ profile for cam%d: %s", self._idx + 1, e)
+                    supported = False
+            elif caps.get("imaging"):
+                # Focus-only device: allow imaging commands without claiming pan/tilt
+                # support. Keep the profile empty so PTZ commands are blocked.
+                supported = True
                 try:
                     profs = self._client.get_profiles()
                     if profs:
-                        profile = profs[0]["token"] # Используем первый доступный профиль
-                        # Если профиль получен, считаем PTZ поддерживаемым
-                        supported = True
-                except Exception as e:
-                    log.warning("Could not get PTZ profile for cam%d, assuming not supported: %s", self._idx + 1, e)
-                    supported = False # Если не удается получить профиль, считаем PTZ неподдерживаемым
+                        profile = profs[0]["token"]
+                except Exception:
+                    profile = ""
 
-                # Пытаемся получить VideoSourceToken для Imaging (фокус), если PTZ поддерживается
-                if supported:
-                    try:
-                        vsc = self._client.get_video_source_configurations()
-                        if vsc:
-                            vstoken = vsc[0]["token"]
-                    except Exception as e:
-                        log.warning("Could not get VideoSourceToken for cam%d: %s", self._idx + 1, e)
-                        # Это не критично для PTZ, но важно для фокуса
+            if supported:
+                try:
+                    vsc = self._client.get_video_source_configurations()
+                    if vsc:
+                        vstoken = vsc[0]["token"]
+                except Exception as e:
+                    log.warning("Could not get VideoSourceToken for cam%d: %s", self._idx + 1, e)
         except Exception as e:
             log.warning("PTZ probe failed for cam%d: %s", self._idx + 1, e)
         self.probed.emit(self._idx, supported, profile, vstoken)

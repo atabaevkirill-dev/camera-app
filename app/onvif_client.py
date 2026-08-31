@@ -174,7 +174,10 @@ class OnvifClient:
         else:
             url = self.device_url
 
-        action = f"{namespace}{action_op}"
+        # ONVIF SOAP action headers are namespaced action names, not a raw
+        # namespace prefix concatenated with the method name. Many cameras reject
+        # the malformed variant that omitted the trailing slash.
+        action = f"{namespace.rstrip('/')}/{action_op}"
         envelope = self._envelope(url, action, body)
         headers = {
             "Content-Type": f'application/soap+xml; charset=utf-8; action="{action}"',
@@ -256,26 +259,58 @@ class OnvifClient:
                 last_err = e
                 continue
             profiles = []
-            for prof in find_all(root, "Profile"):
+            candidates = find_all(root, "Profiles") + find_all(root, "Profile")
+            for prof in candidates:
                 token = prof.attrib.get("token") or ""
+                if not token:
+                    continue
                 name = text_of(find_first(prof, "Name"))
-                if token:
-                    profiles.append({"token": token, "name": name or token})
+                profiles.append({"token": token, "name": name or token})
             if profiles:
                 return profiles
         if last_err:
             raise last_err
         return []
 
+    def get_ptz_profile_token(self) -> str:
+        """Find a PTZ-capable media profile. Some cameras expose a single
+        profile node named Profiles instead of Profile, and some PTZ devices only
+        advertise PTZConfiguration in a subset of profiles."""
+        for ns in (NS_MEDIA, NS_MEDIA2):
+            body = f'<GetProfiles xmlns="{ns}"/>'
+            try:
+                root = self._call("media", "GetProfiles", body, ns)
+            except OnvifError:
+                continue
+            candidates = find_all(root, "Profiles") + find_all(root, "Profile")
+            for prof in candidates:
+                token = prof.attrib.get("token") or ""
+                if not token:
+                    continue
+                if find_first(prof, "PTZConfiguration") is not None:
+                    return token
+            for prof in candidates:
+                token = prof.attrib.get("token") or ""
+                if token:
+                    return token
+        profiles = self.get_profiles()
+        if profiles:
+            return profiles[0]["token"]
+        raise OnvifError("No PTZ profile found")
+
     def get_video_source_configurations(self):
         body = f'<GetVideoSourceConfigurations xmlns="{NS_MEDIA}"/>'
         root = self._call("media", "GetVideoSourceConfigurations", body, NS_MEDIA)
         out = []
-        for conf in find_all(root, "Configuration"):
+        candidates = (find_all(root, "VideoSourceConfiguration") +
+                      find_all(root, "Configuration") +
+                      find_all(root, "Configurations"))
+        for conf in candidates:
             token = conf.attrib.get("token") or ""
+            if not token:
+                continue
             name = text_of(find_first(conf, "Name"))
-            if token:
-                out.append({"token": token, "name": name or token})
+            out.append({"token": token, "name": name or token})
         return out
 
     def get_stream_uri(self, profile_token: str, protocol: str = "RTSP") -> str:
