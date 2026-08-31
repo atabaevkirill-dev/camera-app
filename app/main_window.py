@@ -749,6 +749,11 @@ class MainWindow(QMainWindow):
         cam = self.cfg["cameras"][CAM_KEYS[idx]]
         rtsp = cam["rtsp"]
         self.disconnect_camera(idx)
+        if source_type != "webcam" and self._onvif[idx] is None:
+            try:
+                self._onvif_client(idx)
+            except Exception:
+                pass
         worker = StreamWorker(
             url, rtsp.get("transport", "tcp"), rtsp.get("low_latency", True),
             rtsp.get("record_fps", 25), source_type, webcam_index,
