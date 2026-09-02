@@ -45,7 +45,7 @@ def default_camera() -> dict:
         "pelco_d": {
             "enabled": False,
             "ip": "",
-            "port": 9762,
+            "port": 9761,
             "address": 1,
         },
         "reticle": ReticleStyle().to_dict(),

@@ -267,6 +267,10 @@ class PTZPad(QWidget):
             self.errorOccurred.emit(tr("ptz.need_conn"))
             return None
         profile = (self.get_profile() or "") if self.get_profile else ""
+        if not profile and hasattr(client, "host") and getattr(client, "port", None) is not None:
+            # direct Pelco-D PTZ override: send D-pad commands without requiring an
+            # ONVIF profile token, since the controller is addressed directly by IP/port.
+            profile = "pelco-d"
         if not profile:
             self.errorOccurred.emit(tr("ptz.need_conn"))
             return None

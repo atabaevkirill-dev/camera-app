@@ -680,7 +680,7 @@ class MainWindow(QMainWindow):
         pelco = cam.get("pelco_d") or {}
         if pelco.get("enabled") or pelco.get("ip"):
             try:
-                return PelcoDController(pelco.get("ip", ""), int(pelco.get("port", 9762) or 9762),
+                return PelcoDController(pelco.get("ip", ""), int(pelco.get("port", 9761) or 9761),
                                         int(pelco.get("address", 1) or 1))
             except Exception:
                 return None
@@ -703,6 +703,10 @@ class MainWindow(QMainWindow):
         source_type = cam.get("source_type", "rtsp")
         webcam_index = cam.get("webcam_index", 0)
         self._connect_gen[idx] += 1
+
+        pelco = cam.get("pelco_d") or {}
+        if pelco.get("enabled") or pelco.get("ip"):
+            self._ptz_profile[idx] = "pelco-d"
 
         if source_type == "webcam":
             self._start_worker(idx, "", silent, source_type, webcam_index)

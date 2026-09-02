@@ -32,7 +32,7 @@ class SettingsDialog(QDialog):
 
         conn = cam_cfg.setdefault("connection", {})
         rtsp = cam_cfg.setdefault("rtsp", {})
-        pelco = cam_cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9762, "address": 1})
+        pelco = cam_cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9761, "address": 1})
         source_type = cam_cfg.setdefault("source_type", "rtsp")
         webcam_index = cam_cfg.setdefault("webcam_index", 0)
 
@@ -109,13 +109,15 @@ class SettingsDialog(QDialog):
         self.pelco_ip_edit.setPlaceholderText("192.168.1.115")
         self.pelco_port_spin = QSpinBox()
         self.pelco_port_spin.setRange(1, 65535)
-        self.pelco_port_spin.setValue(int(pelco.get("port", 9762) or 9762))
+        self.pelco_port_spin.setValue(int(pelco.get("port", 9761) or 9761))
         self.pelco_addr_spin = QSpinBox()
         self.pelco_addr_spin.setRange(1, 255)
         self.pelco_addr_spin.setValue(int(pelco.get("address", 1) or 1))
         pform.addRow(tr("pelco.ip"), self.pelco_ip_edit)
         pform.addRow(tr("pelco.port"), self.pelco_port_spin)
         pform.addRow(tr("pelco.address"), self.pelco_addr_spin)
+        self.pelco_group.toggled.connect(self._sync_pelco_edit_state)
+        self._sync_pelco_edit_state(self.pelco_group.isChecked())
         conn_layout.addWidget(self.pelco_group)
 
         test_row = QHBoxLayout()
@@ -230,6 +232,13 @@ class SettingsDialog(QDialog):
             except Exception:
                 pass
 
+    def _sync_pelco_edit_state(self, checked: bool):
+        # Keep Pelco-D fields editable even while the group is unchecked; the
+        # checkbox still controls whether Pelco-D is used as the PTZ backend.
+        self.pelco_ip_edit.setEnabled(True)
+        self.pelco_port_spin.setEnabled(True)
+        self.pelco_addr_spin.setEnabled(True)
+
     # ------------------------------------------------------------- internals
 
     def _collect_back(self) -> None:
@@ -240,7 +249,7 @@ class SettingsDialog(QDialog):
         conn["username"] = self.user_edit.text().strip()
         conn["password"] = self.pass_edit.text()
         conn["auth"] = self.auth_combo.currentData()
-        pelco = self.cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9762, "address": 1})
+        pelco = self.cfg.setdefault("pelco_d", {"enabled": False, "ip": "", "port": 9761, "address": 1})
         pelco["enabled"] = self.pelco_group.isChecked()
         pelco["ip"] = self.pelco_ip_edit.text().strip()
         pelco["port"] = self.pelco_port_spin.value()

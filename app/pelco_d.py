@@ -7,9 +7,9 @@ import socket
 class PelcoDController:
     """Emulates the ONVIF PTZ client interface for Pelco-D PTZ controllers."""
 
-    def __init__(self, host: str, port: int = 9762, address: int = 1):
+    def __init__(self, host: str, port: int = 9761, address: int = 1):
         self.host = (host or "").strip()
-        self.port = int(port or 9762)
+        self.port = int(port or 9761)
         self.address = max(1, min(255, int(address or 1)))
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.settimeout(1.0)
