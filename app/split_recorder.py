@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, QTimer
 
 from .logutil import get_logger
 from .reticle import (STYLE_CROSS, STYLE_DUPLEX, STYLE_MIL_DOT, ReticleStyle)
@@ -107,17 +107,35 @@ class SplitRecorder(QThread):
 
     def __init__(self, workers: list, reticle_styles: list,
                  include_reticle: bool, out_path: str, fps: int = 25,
-                 parent=None):
+                 duration_secs: int = 0, parent=None):
         super().__init__(parent)
         self._workers = workers
         self._styles = reticle_styles
         self._include_reticle = bool(include_reticle)
         self._out_path = out_path
         self._fps = int(fps) if fps and fps > 0 else 25
+        self._duration_secs = int(duration_secs) if duration_secs and duration_secs > 0 else 0
         self._stop_flag = False
+        # --- Новый таймер для остановки ---
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._stop_by_timer)
+        # --- /Новый таймер ---
+
+    def start(self, priority=QThread.InheritPriority):
+        super().start(priority)
+        # Запускаем таймер после запуска потока
+        if self._duration_secs > 0:
+            self._timer.start(self._duration_secs * 1000) # Таймер в миллисекундах
+            log.info("Split recording timer started for %d seconds", self._duration_secs)
 
     def stop(self):
+        self._timer.stop() # Остановить таймер при ручной остановке
         self._stop_flag = True
+
+    def _stop_by_timer(self): # Новый приватный метод для остановки по таймеру
+        """Internal slot called by QTimer to stop recording."""
+        log.info("Stopping split recording due to timer.")
+        self.stop() # Вызываем основной метод остановки
 
     def _placeholder(self, h: int, text: str = "NO SIGNAL"):
         part = np.zeros((h, int(h * 16 / 9), 3), np.uint8)
@@ -184,7 +202,7 @@ class SplitRecorder(QThread):
                 while late >= frame_interval and dup < 8:
                     writer.write(canvas)
                     next_t += frame_interval
-                    late = time.time() - next_t
+                    late = time.time()
                     dup += 1
                 if late > 1.0:  # hopelessly behind: resync the schedule
                     next_t = time.time()
@@ -193,6 +211,7 @@ class SplitRecorder(QThread):
             log.exception("Split recorder error: %s", e)
             self.failed.emit(str(e))
         finally:
+            self._timer.stop() # Убедиться, что таймер остановлен в любом случае
             if writer is not None:
                 try:
                     writer.release()

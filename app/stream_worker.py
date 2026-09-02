@@ -5,7 +5,7 @@ import os
 import threading
 import time
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, QTimer
 
 from .logutil import get_logger
 from .split_recorder import draw_reticle_on_frame
@@ -69,7 +69,10 @@ class StreamWorker(QThread):
         self._cap = None
         self._on_rec_start_cb = on_recording_start_callback
         self._on_rec_stop_cb = on_recording_stop_callback
-
+        # Timer-related attributes
+        self._rec_duration_secs = 0
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._stop_recording_by_timer)
     # ------------------------------------------------------------- interface
 
     def set_url(self, url: str, transport: str, low_latency: bool,
@@ -112,8 +115,8 @@ class StreamWorker(QThread):
         with self._lock:
             return self._recording
 
-    def set_recording(self, path) -> bool:
-        """Start recording to path (None stops). Returns success.
+    def set_recording(self, path, duration_secs=0) -> bool:
+        """Start recording to path for duration_secs (0 means manual stop). Returns success.
 
         Callbacks receive no arguments (C1). The writer is released only
         inside the worker loop (C4) — here we just flip the flag.
@@ -123,17 +126,30 @@ class StreamWorker(QThread):
                 was_recording = self._recording
                 self._recording = False
                 self._rec_path = None
-            if was_recording and self._on_rec_stop_cb is not None:
-                self._safe_cb(self._on_rec_stop_cb, "stop")
+            if was_recording:
+                self._timer.stop() # Остановить таймер при ручной остановке
+                if self._on_rec_stop_cb is not None:
+                    self._safe_cb(self._on_rec_stop_cb, "stop")
             return True
         with self._lock:
             self._rec_path = path
             self._recording = True
+            self._rec_duration_secs = duration_secs # Сохраняем длительность
         if self._on_rec_start_cb is not None:
             self._safe_cb(self._on_rec_start_cb, "start")
+        
+        # --- Логика запуска таймера ---
+        if self._rec_duration_secs > 0:
+            self._timer.start(self._rec_duration_secs * 1000) # Таймер в миллисекундах
+            log.info("Recording timer started for %d seconds", self._rec_duration_secs)
+        else:
+            self._timer.stop() # Убедиться, что таймер остановлен
+        # --- /Логика запуска таймера ---
         return True
 
     def stop(self) -> None:
+        """Stop the worker thread and clean up resources."""
+        self._timer.stop()  # Stop timer when thread is stopping
         self._stop_flag = True
         cap = self._cap
         if cap is not None:
@@ -142,6 +158,11 @@ class StreamWorker(QThread):
             except Exception:
                 pass
             self._cap = None
+
+    def _stop_recording_by_timer(self):
+        """Internal slot called by QTimer to stop recording automatically."""
+        log.info("Timer triggered - stopping recording")
+        self.set_recording(None)  # Use main method to stop recording
 
     def _safe_cb(self, cb, tag: str) -> None:
         try:

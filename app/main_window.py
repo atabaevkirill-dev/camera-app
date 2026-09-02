@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QShortcut
-from PySide6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel, QSpinBox,
                                QMainWindow, QMenu, QPushButton, QSplitter,
                                QStackedWidget, QStatusBar, QVBoxLayout, QWidget)
 
@@ -187,6 +187,11 @@ class MainWindow(QMainWindow):
         self._sync_pending = False
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="main-onvif")
 
+        # --- Новые атрибуты для таймера записи ---
+        self._timer_hours_spinbox = None
+        self._timer_mins_spinbox = None
+        # --- /Новые атрибуты ---
+
         self.setWindowTitle(tr("app.title"))
         self.resize(1500, 860)
 
@@ -363,6 +368,24 @@ class MainWindow(QMainWindow):
         self._apply_reticle_toggle(initial=True)
         h.addWidget(self._reticle_toggle_btn)
 
+        # --- Добавление элементов управления таймером записи ---
+        lbl_timer = QLabel("Rec. Timer: ")
+        lbl_timer.setObjectName("hudMeta") # Используем существующий стиль
+        self._timer_hours_spinbox = QSpinBox()
+        self._timer_hours_spinbox.setRange(0, 23)
+        self._timer_hours_spinbox.setValue(0)
+        self._timer_hours_spinbox.setSuffix("h")
+        self._timer_hours_spinbox.setFixedWidth(60)
+        self._timer_mins_spinbox = QSpinBox()
+        self._timer_mins_spinbox.setRange(0, 59)
+        self._timer_mins_spinbox.setValue(1) # По умолчанию 1 минута
+        self._timer_mins_spinbox.setSuffix("m")
+        self._timer_mins_spinbox.setFixedWidth(60)
+        h.addWidget(lbl_timer)
+        h.addWidget(self._timer_hours_spinbox)
+        h.addWidget(self._timer_mins_spinbox)
+        # --- /Добавление элементов управления таймером записи ---
+
         self._record_all_btn = QPushButton()
         self._record_all_btn.setProperty("buttonRole", "danger")
         self._record_all_btn.setMinimumWidth(200)
@@ -438,6 +461,32 @@ class MainWindow(QMainWindow):
         if path:
             self.editor_view.load_file(path)
 
+    def _toggle_record(self, idx: int) -> None:
+        w = self.workers[idx]
+        if w is None:
+            self.statusBar().showMessage(tr("msg.need_url"), 5000)
+            return
+        if w.is_recording():
+            w.set_recording(None)
+            self.statusBar().showMessage(tr("msg.rec_stopped"), 5000)
+        else:
+            recording_dir = self.cfg.get("recording_dir", profiles.RECORDING_DIR)
+            os.makedirs(recording_dir, exist_ok=True)
+            fname = f"cam{idx + 1}_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
+            path = os.path.join(recording_dir, fname)
+            style, offset = self._reticle_for(idx)
+            w.set_reticle_overlay(self._reticle_in_rec, style, offset)
+            # --- Получаем значение таймера и передаем в set_recording ---
+            duration_hours = self._timer_hours_spinbox.value()
+            duration_mins = self._timer_mins_spinbox.value()
+            duration_secs = (duration_hours * 60 * 60) + (duration_mins * 60)
+            if w.set_recording(path, duration_secs): # Передаем duration_secs
+                log_event("SUCCESS", tr("msg.rec_started", path=os.path.basename(path)))
+                self.statusBar().showMessage(tr("msg.rec_started", path=path), 6000)
+            else:
+                self.statusBar().showMessage(tr("msg.rec_fail"), 5000)
+        self._update_rec_button(idx)
+
     def _toggle_record_all(self):
         # Split recording takes priority: one combined file with both cameras.
         if self._split_recorder is not None and self._split_recorder.isRunning():
@@ -453,16 +502,26 @@ class MainWindow(QMainWindow):
         if not online:
             self.statusBar().showMessage(tr("msg.need_url"), 5000)
             return
+
+        # --- Получаем значение таймера для сплит-записи ---
+        duration_hours = self._timer_hours_spinbox.value()
+        duration_mins = self._timer_mins_spinbox.value()
+        duration_secs = (duration_hours * 60 * 60) + (duration_mins * 60)
+        # --- /Получаем значение таймера ---
+
         recording_dir = self.cfg.get("recording_dir", profiles.RECORDING_DIR)
         os.makedirs(recording_dir, exist_ok=True)
         fname = f"split_{time.strftime('%Y%m%d_%H%M%S')}.avi"
         workers = [self.workers[i] for i in range(2)]
         styles = [self._reticle_for(i)[0] for i in range(2)]
+        # --- Передаем duration_secs в конструктор SplitRecorder ---
         self._split_recorder = SplitRecorder(
             workers, styles, self._reticle_in_rec,
             os.path.join(recording_dir, fname),
             fps=int(self.cfg["cameras"]["cam1"]["rtsp"].get("record_fps", 25) or 25),
+            duration_secs=duration_secs, # Передаем длительность
             parent=self)
+        # --- /Передаем duration_secs ---
         self._split_recorder.stopped.connect(lambda _p: self._on_split_stopped())
         self._split_recorder.failed.connect(lambda m: self._worker_message(0, m))
         self._split_recorder.start()
@@ -917,28 +976,6 @@ class MainWindow(QMainWindow):
         if path:
             self._schedule_archive_sync()
             self.statusBar().showMessage(tr("msg.shot_saved", path=path), 6000)
-
-    def _toggle_record(self, idx: int) -> None:
-        w = self.workers[idx]
-        if w is None:
-            self.statusBar().showMessage(tr("msg.need_url"), 5000)
-            return
-        if w.is_recording():
-            w.set_recording(None)
-            self.statusBar().showMessage(tr("msg.rec_stopped"), 5000)
-        else:
-            recording_dir = self.cfg.get("recording_dir", profiles.RECORDING_DIR)
-            os.makedirs(recording_dir, exist_ok=True)
-            fname = f"cam{idx + 1}_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
-            path = os.path.join(recording_dir, fname)
-            style, offset = self._reticle_for(idx)
-            w.set_reticle_overlay(self._reticle_in_rec, style, offset)
-            if w.set_recording(path):
-                log_event("SUCCESS", tr("msg.rec_started", path=os.path.basename(path)))
-                self.statusBar().showMessage(tr("msg.rec_started", path=path), 6000)
-            else:
-                self.statusBar().showMessage(tr("msg.rec_fail"), 5000)
-        self._update_rec_button(idx)
 
     def _update_rec_button(self, idx: int) -> None:
         self._update_record_all_button()
